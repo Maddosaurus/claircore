@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/quay/claircore"
 	"github.com/quay/zlog"
+	"os"
 )
 
 var (
@@ -41,10 +42,41 @@ func NewNodeScanner(ctx context.Context, concurrent int, opts *Options) (*NodeSc
 // It expects the root dir of a OS at the given location,
 // e.g. a r/o mount of the Node OS.
 func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, _ []*claircore.Layer) error {
-	//nodeFS := os.DirFS(mountLocation)
-	//nodeLayer := claircore.Layer{
-	//	Hash: claircore.Digest{},
-	//}
-	// TODO: How to create a layer out of the real FS?
+	// FIXME: Ensure mount succeeded
+	nodeFS := os.DirFS(mountLocation)
+	l := &claircore.Layer{}
+	l.InitROFS(ctx, nodeFS)
+
+	// FIXME: Error handling for called scanners
+	for _, s := range ns.ps {
+		scanLayer(ctx, l, s)
+	}
+	for _, s := range ns.ds {
+		scanLayer(ctx, l, s)
+	}
+	for _, s := range ns.rs {
+		scanLayer(ctx, l, s)
+	}
+	for _, s := range ns.fis {
+		scanLayer(ctx, l, s)
+	}
+	return nil
+}
+
+func scanLayer(ctx context.Context, l *claircore.Layer, s VersionedScanner) error {
+	ctx = zlog.ContextWithValues(ctx,
+		"component", "indexer/NodeScanner.scanLayer",
+		"scanner", s.Name(),
+		"kind", s.Kind(),
+		"layer", l.Hash.String())
+	zlog.Debug(ctx).Msg("scan start")
+	defer zlog.Debug(ctx).Msg("scan done")
+
+	var result result
+	if err := result.Do(ctx, s, l); err != nil {
+		return err
+	}
+
+	// FIXME: Add error handling and result collection
 	return nil
 }

@@ -88,6 +88,7 @@ func (l *Layer) InitROFS(ctx context.Context, sys fs.FS) error {
 	l.sys = sys
 
 	// FIXME: Adapt to real init method
+	l.init = true
 	return nil
 }
 
