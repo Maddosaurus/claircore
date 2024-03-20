@@ -75,6 +75,22 @@ type Layer struct {
 	init    bool // Used to track initialization.
 }
 
+// InitROFS initializes a layer based on a real folder
+func (l *Layer) InitROFS(ctx context.Context, sys fs.FS) error {
+	if l.init {
+		return fmt.Errorf("claircore: Init called on already initialized Layer")
+	}
+	var err error
+	l.Hash, err = ParseDigest("") // FIXME: Potentially skip the hash
+	if err != nil {
+		return err
+	}
+	l.sys = sys
+
+	// FIXME: Adapt to real init method
+	return nil
+}
+
 // Init initializes a Layer in-place. This is provided for flexibility when
 // constructing a slice of Layers.
 func (l *Layer) Init(ctx context.Context, desc *LayerDescription, r io.ReaderAt) error {
