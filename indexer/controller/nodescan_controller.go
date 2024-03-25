@@ -159,7 +159,10 @@ type nodescanStateFunc func(context.Context, *NodescanController) (State, error)
 // TODO: Add more states
 // provides a mapping of States to their implemented stateFunc methods
 var nsStateToStateFunc = map[State]nodescanStateFunc{
-	ScanLayers: scanFS,
+	CheckManifest: scanFS,
+	FetchLayers:   scanFS,
+	ScanLayers:    scanFS,
+	// FIXME: Add the remaining states, as the state machine needs them
 }
 
 // TODO: Move me
