@@ -246,15 +246,12 @@ func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client, iopts *ind
 	// create indexer.Options
 	l.indexerOptions = &indexer.Options{
 		Store:         l.store,
-		FetchArena:    l.fa,
+		FetchArena:    indexer.NewNodeArena(cl, "/tmp/rhcos"),
 		Ecosystems:    opts.Ecosystems,
 		Vscnrs:        l.vscnrs,
 		Client:        l.client,
 		ScannerConfig: opts.ScannerConfig,
 		Resolvers:     opts.Resolvers,
-	}
-	if iopts != nil {
-		l.indexerOptions = iopts
 	}
 
 	l.indexerOptions.LayerScanner, err = indexer.NewNodeScanner(ctx, opts.LayerScanConcurrency, l.indexerOptions)
@@ -316,7 +313,7 @@ func (l *Libindex) IndexNode(ctx context.Context, manifest *claircore.Manifest) 
 		return nil, err
 	}
 	zlog.Debug(ctx).Msg("locking OK")
-	return l.nodescanController.IndexNode(lc)
+	return l.nodescanController.IndexNode(lc) // FIXME: Better init
 }
 
 // State returns an opaque identifier identifying how the struct is currently
