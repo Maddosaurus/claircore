@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/internal/wart"
-	indexer "github.com/quay/claircore/test/mock/indexer"
 	"github.com/quay/zlog"
 	"net/http"
 )
@@ -28,7 +27,7 @@ func NewNodeArena(wc *http.Client, mountPath string) *NodeArena {
 	}
 }
 
-func (n *NodeArena) Realizer(_ context.Context) indexer.Realizer {
+func (n *NodeArena) Realizer(_ context.Context) Realizer {
 	return &MountedFS{n: n}
 }
 
