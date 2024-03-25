@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/quay/claircore/libindex"
 	"math/rand"
 	"time"
 
@@ -15,8 +14,12 @@ import (
 )
 
 var (
-	_ libindex.IndexController = (*Controller)(nil)
+	_ IndexController = (*Controller)(nil)
 )
+
+type IndexController interface {
+	Index(ctx context.Context, manifest *claircore.Manifest) (*claircore.IndexReport, error)
+}
 
 // Controller is a control structure for scanning a manifest.
 //

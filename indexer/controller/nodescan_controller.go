@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/indexer"
-	"github.com/quay/claircore/libindex"
 	"github.com/quay/zlog"
 	"time"
 )
 
 var (
-	_ libindex.IndexController = (*NodescanController)(nil)
+	_ IndexController = (*NodescanController)(nil)
 )
 
 // NodescanController is a specialized controller for scanning running OSes instead of manifests.
