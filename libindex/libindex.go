@@ -167,7 +167,7 @@ func New(ctx context.Context, opts *Options, cl *http.Client) (*Libindex, error)
 
 // NewNodeScan .
 // FIXME: Expose indexer options without duplication
-func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client, iopts *indexer.Options) (*Libindex, error) {
+func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client) (*Libindex, error) {
 	ctx = zlog.ContextWithValues(ctx, "component", "libindex/New")
 	// required
 	if opts.Locker == nil {
@@ -297,15 +297,14 @@ func (l *Libindex) Index(ctx context.Context, manifest *claircore.Manifest) (*cl
 
 // IndexNode .
 // FIXME: Dedup
-func (l *Libindex) IndexNode(ctx context.Context, manifest *claircore.Manifest) (*claircore.IndexReport, error) {
+func (l *Libindex) IndexNode(ctx context.Context) (*claircore.IndexReport, error) {
 	ctx = zlog.ContextWithValues(ctx,
-		"component", "libindex/Libindex.Index",
-		"manifest", manifest.Hash.String())
+		"component", "libindex/Libindex.Index")
 	zlog.Info(ctx).Msg("index request start")
 	defer zlog.Info(ctx).Msg("index request done")
 
 	zlog.Debug(ctx).Msg("locking attempt")
-	lc, done := l.locker.Lock(ctx, manifest.Hash.String())
+	lc, done := l.locker.Lock(ctx, "nodescan")
 	defer done()
 	// The process may have waited on the lock, so check that the context is
 	// still active.
