@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/quay/claircore/libindex"
 	"math/rand"
 	"time"
 
@@ -11,6 +12,10 @@ import (
 
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/indexer"
+)
+
+var (
+	_ libindex.IndexController = (*Controller)(nil)
 )
 
 // Controller is a control structure for scanning a manifest.

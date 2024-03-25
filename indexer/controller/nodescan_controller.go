@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/indexer"
+	"github.com/quay/claircore/libindex"
 	"github.com/quay/zlog"
-	"io/fs"
 	"time"
+)
+
+var (
+	_ libindex.IndexController = (*NodescanController)(nil)
 )
 
 // NodescanController is a specialized controller for scanning running OSes instead of manifests.
@@ -48,9 +52,14 @@ func NewNodescanController(options *indexer.Options) *NodescanController {
 	return s
 }
 
+func (s *NodescanController) Index(ctx context.Context, _ *claircore.Manifest) (*claircore.IndexReport, error) {
+	zlog.Error(ctx).Msg("Not implemented for Nodescan Controller. Use IndexNode!")
+	return nil, errors.New("not implemented for Nodescan Controller. Use IndexNode")
+}
+
 // IndexNode kicks off an index of a node, given its filesystem
 // Initial state set in the constructor.
-func (s *Controller) IndexNode(ctx context.Context, targetBasePath fs.FS) (*claircore.IndexReport, error) {
+func (s *NodescanController) IndexNode(ctx context.Context) (*claircore.IndexReport, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -59,7 +68,7 @@ func (s *Controller) IndexNode(ctx context.Context, targetBasePath fs.FS) (*clai
 
 // Run executes each stateFunc and blocks until either an error occurs or a
 // Terminal state is encountered.
-func (s *Controller) runNodescan(ctx context.Context) (err error) {
+func (s *NodescanController) runNodescan(ctx context.Context) (err error) {
 	var next State
 	var retry bool
 	var w time.Duration
@@ -68,7 +77,7 @@ func (s *Controller) runNodescan(ctx context.Context) (err error) {
 	// the corresponding function.
 	for err == nil && s.currentState != Terminal {
 		ctx := zlog.ContextWithValues(ctx, "state", s.currentState.String())
-		next, err = stateToStateFunc[s.currentState](ctx, s)
+		next, err = nsStateToStateFunc[s.currentState](ctx, s)
 		switch {
 		case errors.Is(err, nil) && !errors.Is(ctx.Err(), nil):
 			// If the passed-in context reports an error, drop out of the loop.
@@ -134,4 +143,34 @@ func (s *Controller) runNodescan(ctx context.Context) (err error) {
 		return err
 	}
 	return nil
+
+}
+
+// setState is a helper method to transition the controller to the provided next state
+// FIXME: Dedup
+func (s *NodescanController) setState(state State) {
+	s.currentState = state
+	s.report.State = state.String()
+}
+
+// FIXME: possibly dedup both of these
+type nodescanStateFunc func(context.Context, *NodescanController) (State, error)
+
+// Reduced state machine
+// TODO: Add more states
+// provides a mapping of States to their implemented stateFunc methods
+var nsStateToStateFunc = map[State]nodescanStateFunc{
+	ScanLayers: scanFS,
+}
+
+// TODO: Move me
+func scanFS(ctx context.Context, n *NodescanController) (State, error) {
+	zlog.Info(ctx).Msg("FS scan start")
+	defer zlog.Info(ctx).Msg("FS scan done")
+	err := n.LayerScanner.Scan(ctx, claircore.Digest{}, nil)
+	if err != nil {
+		return Terminal, fmt.Errorf("failed to scan node filesystem: %w", err)
+		zlog.Debug(ctx).Msg("FS scan ok")
+	}
+	return Terminal, nil // FIXME: Use correct status
 }

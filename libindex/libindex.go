@@ -63,6 +63,8 @@ type Libindex struct {
 	// indexerOptions hold construction context for the layerScanner and the
 	// controller factory.
 	indexerOptions *indexer.Options
+	// FIXME: Integrate into options
+	nodescanController *controller.NodescanController
 }
 
 // New creates a new instance of libindex.
@@ -156,6 +158,7 @@ func New(ctx context.Context, opts *Options, cl *http.Client) (*Libindex, error)
 		Resolvers:     opts.Resolvers,
 	}
 	l.indexerOptions.LayerScanner, err = indexer.NewLayerScanner(ctx, opts.LayerScanConcurrency, l.indexerOptions)
+	l.nodescanController = controller.NewNodescanController(l.indexerOptions) // FIXME: Move somewhere sensible
 	if err != nil {
 		return nil, err
 	}
@@ -193,6 +196,27 @@ func (l *Libindex) Index(ctx context.Context, manifest *claircore.Manifest) (*cl
 	zlog.Debug(ctx).Msg("locking OK")
 	c := l.ControllerFactory(l.indexerOptions)
 	return c.Index(lc, manifest)
+}
+
+// IndexNode .
+// FIXME: Dedup
+func (l *Libindex) IndexNode(ctx context.Context, manifest *claircore.Manifest) (*claircore.IndexReport, error) {
+	ctx = zlog.ContextWithValues(ctx,
+		"component", "libindex/Libindex.Index",
+		"manifest", manifest.Hash.String())
+	zlog.Info(ctx).Msg("index request start")
+	defer zlog.Info(ctx).Msg("index request done")
+
+	zlog.Debug(ctx).Msg("locking attempt")
+	lc, done := l.locker.Lock(ctx, manifest.Hash.String())
+	defer done()
+	// The process may have waited on the lock, so check that the context is
+	// still active.
+	if err := lc.Err(); !errors.Is(err, nil) {
+		return nil, err
+	}
+	zlog.Debug(ctx).Msg("locking OK")
+	return l.nodescanController.IndexNode(lc)
 }
 
 // State returns an opaque identifier identifying how the struct is currently
