@@ -43,6 +43,7 @@ func NewNodeScanner(ctx context.Context, concurrent int, opts *Options) (*NodeSc
 // e.g. a r/o mount of the Node OS.
 func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, _ []*claircore.Layer) error {
 	// FIXME: Ensure mount succeeded
+	// FIXME: Technically, this should have been done by a realizer in a pre-stage!
 	nodeFS := os.DirFS(mountLocation)
 	l := &claircore.Layer{}
 	l.InitROFS(ctx, nodeFS)

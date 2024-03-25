@@ -257,7 +257,7 @@ func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client, iopts *ind
 		l.indexerOptions = iopts
 	}
 
-	l.indexerOptions.LayerScanner, err = indexer.NewLayerScanner(ctx, opts.LayerScanConcurrency, l.indexerOptions)
+	l.indexerOptions.LayerScanner, err = indexer.NewNodeScanner(ctx, opts.LayerScanConcurrency, l.indexerOptions)
 	l.nodescanController = controller.NewNodescanController(l.indexerOptions) // FIXME: Move somewhere sensible
 	if err != nil {
 		return nil, err

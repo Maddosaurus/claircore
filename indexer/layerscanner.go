@@ -13,6 +13,12 @@ import (
 	"github.com/quay/claircore"
 )
 
+// LayeredScannerI abstracts the capabilities a scanner needs
+// FIXME: Rename
+type LayeredScannerI interface {
+	Scan(ctx context.Context, manifest claircore.Digest, layers []*claircore.Layer) error
+}
+
 type LayerScanner struct {
 	store Store
 

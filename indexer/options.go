@@ -11,7 +11,7 @@ type Options struct {
 		Package, Dist, Repo, File map[string]func(interface{}) error
 	}
 	Store        Store
-	LayerScanner *LayerScanner
+	LayerScanner LayeredScannerI
 	FetchArena   FetchArena
 	Ecosystems   []*Ecosystem
 	Resolvers    []Resolver
