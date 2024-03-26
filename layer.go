@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/quay/claircore/pkg/tarfs"
 )
@@ -81,7 +82,7 @@ func (l *Layer) InitROFS(ctx context.Context, sys fs.FS) error {
 		return fmt.Errorf("claircore: Init called on already initialized Layer")
 	}
 	var err error
-	l.Hash, err = ParseDigest("") // FIXME: Potentially skip the hash
+	l.Hash, err = ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Actually calc hash of FS
 	if err != nil {
 		return err
 	}
