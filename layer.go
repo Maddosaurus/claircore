@@ -77,7 +77,7 @@ type Layer struct {
 }
 
 // InitROFS initializes a layer based on a real folder
-func (l *Layer) InitROFS(ctx context.Context, sys fs.FS) error {
+func (l *Layer) InitROFS(_ context.Context, sys fs.FS) error {
 	if l.init {
 		return fmt.Errorf("claircore: Init called on already initialized Layer")
 	}

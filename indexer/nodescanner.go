@@ -48,15 +48,19 @@ func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, layers []*c
 		default:
 		}
 		for _, s := range ns.ps {
+			zlog.Info(ctx).Msg("Scanning with ps scanner")
 			scanLayer(ctx, l, s)
 		}
 		for _, s := range ns.ds {
+			zlog.Info(ctx).Msg("Scanning with ds scanner")
 			scanLayer(ctx, l, s)
 		}
 		for _, s := range ns.rs {
+			zlog.Info(ctx).Msg("Scanning with rs scanner")
 			scanLayer(ctx, l, s)
 		}
 		for _, s := range ns.fis {
+			zlog.Info(ctx).Msg("Scanning with fis scanner")
 			scanLayer(ctx, l, s)
 		}
 	}
