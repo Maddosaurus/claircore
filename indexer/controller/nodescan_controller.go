@@ -7,6 +7,7 @@ import (
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/indexer"
 	"github.com/quay/zlog"
+	"strings"
 	"time"
 )
 
@@ -62,6 +63,11 @@ func (s *NodescanController) IndexNode(ctx context.Context) (*claircore.IndexRep
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	h, err := claircore.ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Calc this hash on request, based on the FS
+	if err != nil {
+		return nil, err
+	}
+	s.report.Hash = h
 	return s.report, s.runNodescan(ctx)
 }
 

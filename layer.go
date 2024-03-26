@@ -82,7 +82,7 @@ func (l *Layer) InitROFS(ctx context.Context, sys fs.FS) error {
 		return fmt.Errorf("claircore: Init called on already initialized Layer")
 	}
 	var err error
-	l.Hash, err = ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Actually calc hash of FS
+	l.Hash, err = ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Add this as param?
 	if err != nil {
 		return err
 	}
