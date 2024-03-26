@@ -29,6 +29,8 @@ type NodescanController struct {
 	Realizer indexer.Realizer
 	// Vscnrs are the scanners that are used during indexing
 	Vscnrs indexer.VersionedScanners
+	// TODO: Probably not the  best way/place to store this
+	nodeLayers []*claircore.Layer
 }
 
 // NewNodescanController constructs a controller given an Opts struct
@@ -47,6 +49,7 @@ func NewNodescanController(options *indexer.Options) *NodescanController {
 		currentState: CheckManifest,
 		report:       scanRes,
 		Vscnrs:       options.Vscnrs,
+		nodeLayers:   make([]*claircore.Layer, 1),
 	}
 
 	return s
@@ -68,6 +71,13 @@ func (s *NodescanController) IndexNode(ctx context.Context) (*claircore.IndexRep
 		return nil, err
 	}
 	s.report.Hash = h
+	zlog.Info(ctx).Msg("Starting Node index")
+	defer zlog.Info(ctx).Msg("Node index done")
+	s.Realizer = s.FetchArena.Realizer(ctx)
+	err = s.Realizer.Realize(ctx, s.nodeLayers) // FIXME: Do that differently
+	if err != nil {
+		return nil, err
+	}
 	return s.report, s.runNodescan(ctx)
 }
 
@@ -165,17 +175,30 @@ type nodescanStateFunc func(context.Context, *NodescanController) (State, error)
 // TODO: Add more states
 // provides a mapping of States to their implemented stateFunc methods
 var nsStateToStateFunc = map[State]nodescanStateFunc{
-	CheckManifest: scanFS,
-	FetchLayers:   scanFS,
+	CheckManifest: advanceToFetch,
+	FetchLayers:   prepareFS,
 	ScanLayers:    scanFS,
 	// FIXME: Add the remaining states, as the state machine needs them
 }
 
-// TODO: Move me
+func advanceToFetch(_ context.Context, n *NodescanController) (State, error) {
+	return FetchLayers, nil
+}
+
+// TODO: Move
+func prepareFS(_ context.Context, n *NodescanController) (State, error) {
+	return ScanLayers, nil
+}
+
+// TODO: Move
 func scanFS(ctx context.Context, n *NodescanController) (State, error) {
 	zlog.Info(ctx).Msg("FS scan start")
 	defer zlog.Info(ctx).Msg("FS scan done")
-	err := n.LayerScanner.Scan(ctx, claircore.Digest{}, nil)
+	h, err := claircore.ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Calc this hash on request, based on the FS
+	if err != nil {
+		return Terminal, err
+	}
+	err = n.LayerScanner.Scan(ctx, h, n.nodeLayers)
 	if err != nil {
 		return Terminal, fmt.Errorf("failed to scan node filesystem: %w", err)
 		zlog.Debug(ctx).Msg("FS scan ok")

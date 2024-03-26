@@ -3,9 +3,9 @@ package indexer
 import (
 	"context"
 	"github.com/quay/claircore"
-	"github.com/quay/claircore/internal/wart"
 	"github.com/quay/zlog"
 	"net/http"
+	"os"
 )
 
 var (
@@ -46,22 +46,19 @@ type MountedFS struct {
 // RealizeDescriptions operates on the r/o Node OS mount.
 // The mounted OS dir is treated as a single layer.
 func (m *MountedFS) RealizeDescriptions(ctx context.Context, _ []claircore.LayerDescription) ([]claircore.Layer, error) {
-	// TODO: Make calling robust
+	// TODO: Ensure mounting works
 	ls := make([]claircore.Layer, 1)
-	d := claircore.LayerDescription{
-		Digest:    "1234", // FIXME: Calc digest of whole OS? Ignore and scan anyways?
-		URI:       "",     // Live system, no fetch URI
-		MediaType: "",     // FIXME: Extend this for live system?
-		Headers:   nil,
-	}
-	ls[0].Init(ctx, &d, nil)
+	nodeFS := os.DirFS(m.n.mountPath)
+	ls[0].InitROFS(ctx, nodeFS)
 	return ls, nil
 }
 
+// Realize is a deprecated way of realizing.
+// FIXME: dedup
 func (m *MountedFS) Realize(ctx context.Context, ls []*claircore.Layer) error {
-	l, err := m.RealizeDescriptions(ctx, []claircore.LayerDescription{})
-	wart.CopyLayerPointers(ls, l)
-	return err
+	// TODO: Ensure mounting works
+	nodeFS := os.DirFS(m.n.mountPath)
+	return ls[0].InitROFS(ctx, nodeFS)
 }
 
 func (m *MountedFS) Close() error {

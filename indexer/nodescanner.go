@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/quay/claircore"
 	"github.com/quay/zlog"
-	"os"
 )
 
 var (
@@ -41,26 +40,27 @@ func NewNodeScanner(ctx context.Context, concurrent int, opts *Options) (*NodeSc
 //
 // It expects the root dir of a OS at the given location,
 // e.g. a r/o mount of the Node OS.
-func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, _ []*claircore.Layer) error {
-	// FIXME: Ensure mount succeeded
-	// FIXME: Technically, this should have been done by a realizer in a pre-stage!
-	nodeFS := os.DirFS(mountLocation)
-	l := &claircore.Layer{}
-	l.InitROFS(ctx, nodeFS)
-
+func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, layers []*claircore.Layer) error {
+	for _, l := range layers {
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+		for _, s := range ns.ps {
+			scanLayer(ctx, l, s)
+		}
+		for _, s := range ns.ds {
+			scanLayer(ctx, l, s)
+		}
+		for _, s := range ns.rs {
+			scanLayer(ctx, l, s)
+		}
+		for _, s := range ns.fis {
+			scanLayer(ctx, l, s)
+		}
+	}
 	// FIXME: Error handling for called scanners
-	for _, s := range ns.ps {
-		scanLayer(ctx, l, s)
-	}
-	for _, s := range ns.ds {
-		scanLayer(ctx, l, s)
-	}
-	for _, s := range ns.rs {
-		scanLayer(ctx, l, s)
-	}
-	for _, s := range ns.fis {
-		scanLayer(ctx, l, s)
-	}
 	return nil
 }
 
