@@ -99,10 +99,12 @@ func (s *NodescanController) checkMount(ctx context.Context) error {
 			Msg("error opening filesystem")
 		return err
 	}
-	zlog.Error(ctx).
-		Err(err).
-		Msg("failed sanity check for filesystem. Ensure it is mounted correctly.")
 	_, err = fs.Open("etc") // FIXME: Do a better sanity check
+	if err != nil {
+		zlog.Error(ctx).
+			Err(err).
+			Msg("failed sanity check for filesystem. Ensure it is mounted correctly.")
+	}
 	return err
 }
 
@@ -117,7 +119,7 @@ func (s *NodescanController) runNodescan(ctx context.Context) (err error) {
 	// the corresponding function.
 	for err == nil && s.currentState != Terminal {
 		ctx := zlog.ContextWithValues(ctx, "state", s.currentState.String())
-		zlog.Info(ctx).Msg("Next state")
+		zlog.Info(ctx).Msgf("Current report: %+v", s.report)
 		next, err = nsStateToStateFunc[s.currentState](ctx, s)
 		switch {
 		case errors.Is(err, nil) && !errors.Is(ctx.Err(), nil):
@@ -239,7 +241,7 @@ func advanceToFetch(ctx context.Context, n *NodescanController) (State, error) {
 		}
 		return FetchLayers, nil
 	}
-	return Terminal, nil
+	return FetchLayers, nil
 }
 
 func prepareFS(_ context.Context, n *NodescanController) (State, error) {
