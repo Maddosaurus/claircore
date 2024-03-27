@@ -13,6 +13,7 @@ var (
 
 // TODO: This has no concurrency currently. Also, eval whether we can get the layerScanner to work with a single layer
 type NodeScanner struct {
+	store Store
 	// Pre-constructed and configured scanners.
 	ps  []PackageScanner
 	ds  []DistributionScanner
@@ -29,10 +30,11 @@ func NewNodeScanner(ctx context.Context, concurrent int, opts *Options) (*NodeSc
 		return nil, fmt.Errorf("failed to extract scanners from ecosystems: %v", err)
 	}
 	return &NodeScanner{
-		ps:  configAndFilter(ctx, opts, ps),
-		ds:  configAndFilter(ctx, opts, ds),
-		rs:  configAndFilter(ctx, opts, rs),
-		fis: configAndFilter(ctx, opts, fs),
+		store: opts.Store,
+		ps:    configAndFilter(ctx, opts, ps),
+		ds:    configAndFilter(ctx, opts, ds),
+		rs:    configAndFilter(ctx, opts, rs),
+		fis:   configAndFilter(ctx, opts, fs),
 	}, nil
 }
 
@@ -49,26 +51,38 @@ func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, layers []*c
 		}
 		for _, s := range ns.ps {
 			zlog.Info(ctx).Msg("Scanning with ps scanner")
-			scanLayer(ctx, l, s)
+			err := ns.scanLayer(ctx, l, s)
+			if err != nil {
+				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+			}
 		}
 		for _, s := range ns.ds {
 			zlog.Info(ctx).Msg("Scanning with ds scanner")
-			scanLayer(ctx, l, s)
+			err := ns.scanLayer(ctx, l, s)
+			if err != nil {
+				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+			}
 		}
 		for _, s := range ns.rs {
 			zlog.Info(ctx).Msg("Scanning with rs scanner")
-			scanLayer(ctx, l, s)
+			err := ns.scanLayer(ctx, l, s)
+			if err != nil {
+				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+			}
 		}
 		for _, s := range ns.fis {
 			zlog.Info(ctx).Msg("Scanning with fis scanner")
-			scanLayer(ctx, l, s)
+			err := ns.scanLayer(ctx, l, s)
+			if err != nil {
+				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+			}
 		}
 	}
 	// FIXME: Error handling for called scanners
 	return nil
 }
 
-func scanLayer(ctx context.Context, l *claircore.Layer, s VersionedScanner) error {
+func (ns *NodeScanner) scanLayer(ctx context.Context, l *claircore.Layer, s VersionedScanner) error {
 	ctx = zlog.ContextWithValues(ctx,
 		"component", "indexer/NodeScanner.scanLayer",
 		"scanner", s.Name(),
@@ -77,11 +91,23 @@ func scanLayer(ctx context.Context, l *claircore.Layer, s VersionedScanner) erro
 	zlog.Debug(ctx).Msg("scan start")
 	defer zlog.Debug(ctx).Msg("scan done")
 
+	ok, err := ns.store.LayerScanned(ctx, l.Hash, s)
+	if err != nil {
+		return err
+	}
+	if ok {
+		zlog.Debug(ctx).Msg("layer already scanned")
+		return nil
+	}
+
 	var result result
 	if err := result.Do(ctx, s, l); err != nil {
 		return err
 	}
 
-	// FIXME: Add error handling and result collection
-	return nil
+	if err = ns.store.SetLayerScanned(ctx, l.Hash, s); err != nil {
+		return fmt.Errorf("could not set layer scanned: %w", err)
+	}
+
+	return result.Store(ctx, ns.store, s, l)
 }
