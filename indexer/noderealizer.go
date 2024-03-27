@@ -69,8 +69,8 @@ func (m *MountedFS) Realize(ctx context.Context, ls []*claircore.Layer) error {
 }
 
 func (m *MountedFS) Close() error {
-	//TODO implement me
-	panic("implement me")
+	// noop for os.DirFS
+	return nil
 }
 
 // LayerOrPointer abstracts over a [claircore.Layer] or a pointer to a

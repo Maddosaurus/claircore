@@ -7,7 +7,6 @@ import (
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/indexer"
 	"github.com/quay/zlog"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -79,7 +78,30 @@ func (s *NodescanController) IndexNode(ctx context.Context) (*claircore.IndexRep
 	if err != nil {
 		return nil, err
 	}
+	err = s.checkMount(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer s.Realizer.Close()
 	return s.report, s.runNodescan(ctx)
+}
+
+func (s *NodescanController) checkMount(ctx context.Context) error {
+	if len(s.nodeLayers) != 1 {
+		return errors.New(fmt.Sprintf("unexpected amount of layers in slice. Expected 1, got %d", len(s.nodeLayers)))
+	}
+	fs, err := s.nodeLayers[0].FS()
+	if err != nil {
+		zlog.Error(ctx).
+			Err(err).
+			Msg("error opening filesystem")
+		return err
+	}
+	zlog.Error(ctx).
+		Err(err).
+		Msg("failed sanity check for filesystem. Ensure it is mounted correctly.")
+	_, err = fs.Open("etc") // FIXME: Do a better sanity check
+	return err
 }
 
 // Run executes each stateFunc and blocks until either an error occurs or a
@@ -190,48 +212,31 @@ var nsStateToStateFunc = map[State]nodescanStateFunc{
 // FIXME: Mostly 1:1 copy of controller.checkManifest
 func advanceToFetch(ctx context.Context, n *NodescanController) (State, error) {
 	// TODO: Check whether the node fs has changed, and persist the current checksum if so
-	// determine if we've seen this manifest and if we've
-	// scanned it with the desired scanners
+
 	d, _ := claircore.ParseDigest(`sha256:` + strings.Repeat(`a`, 64))
 	ok, err := n.Store.ManifestScanned(ctx, d, n.Vscnrs)
 	if err != nil {
 		return Terminal, err
 	}
 
-	scannedManifestCounter.WithLabelValues(strconv.FormatBool(ok)).Add(1)
+	if ok {
+		zlog.Debug(ctx).Msg("Manifest is known, should not scan again")
+	}
 
-	// if we haven't seen this manifest, determine which scanners to use, persist it
-	// and transition to FetchLayer state.
 	if !ok {
+		// FIXME: Reintroduce scanner selection here like in the controller state func
 		zlog.Info(ctx).Msg("manifest to be scanned")
-
-		// if a manifest was analyzed by a particular scanner we can
-		// omit it from this index, as all its comprising layers were analyzed
-		// by the particular scanner as well.
-		filtered := make(indexer.VersionedScanners, 0, len(n.Vscnrs))
-		for i := range n.Vscnrs {
-			ok, err := n.Store.ManifestScanned(ctx, d, n.Vscnrs[i:i+1]) // slice this to avoid allocations
-			if err != nil {
-				return Terminal, err
-			}
-			if !ok {
-				filtered = append(filtered, n.Vscnrs[i])
-			}
-		}
-		n.Vscnrs = filtered
 
 		m := claircore.Manifest{
 			Hash:   d,
 			Layers: nil,
 		}
-
 		err := n.Store.PersistManifest(ctx, m)
 		if err != nil {
 			return Terminal, fmt.Errorf("failed to persist manifest: %w", err)
 		}
 		return FetchLayers, nil
 	}
-
 	return Terminal, nil
 }
 
@@ -251,13 +256,13 @@ func scanFS(ctx context.Context, n *NodescanController) (State, error) {
 		return Terminal, fmt.Errorf("failed to scan node filesystem: %w", err)
 		zlog.Debug(ctx).Msg("FS scan ok")
 	}
-	return Coalesce, nil // FIXME: Use correct status
+	return Coalesce, nil
 }
 
 func coalesceFS(ctx context.Context, n *NodescanController) (State, error) {
 	// FIXME: Actually join all of the results and compile a report
 	n.report.Success = true
-	return IndexManifest, nil
+	return Terminal, nil // IndexManifest, nil // FIXME: Use correct status
 }
 
 func indexFS(ctx context.Context, n *NodescanController) (State, error) {
