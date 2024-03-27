@@ -7,7 +7,9 @@ import (
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/indexer"
 	"github.com/quay/zlog"
+	"golang.org/x/sync/errgroup"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -259,18 +261,120 @@ func scanFS(ctx context.Context, n *NodescanController) (State, error) {
 	return Coalesce, nil
 }
 
+// TODO: This is almost a 1:1 copy of controller.coalesce. Dedup!
 func coalesceFS(ctx context.Context, n *NodescanController) (State, error) {
-	// FIXME: Actually join all of the results and compile a report
-	n.report.Success = true
-	return Terminal, nil // IndexManifest, nil // FIXME: Use correct status
+	mu := sync.Mutex{}
+	reports := []*claircore.IndexReport{}
+	g, gctx := errgroup.WithContext(ctx)
+	// Dispatch a Coalescer goroutine for each ecosystem.
+	for _, ecosystem := range n.Ecosystems {
+		select {
+		case <-gctx.Done():
+			break
+		default:
+		}
+		artifacts := []*indexer.LayerArtifacts{}
+		pkgScanners, _ := ecosystem.PackageScanners(gctx)
+		distScanners, _ := ecosystem.DistributionScanners(gctx)
+		repoScanners, _ := ecosystem.RepositoryScanners(gctx)
+		fileScanners := []indexer.FileScanner{}
+		if ecosystem.FileScanners != nil {
+			fileScanners, _ = ecosystem.FileScanners(gctx)
+		}
+		// Pack "artifacts" variable.
+		for _, layer := range n.nodeLayers {
+			la := &indexer.LayerArtifacts{
+				Hash: layer.Hash,
+			}
+			var vscnrs indexer.VersionedScanners
+			vscnrs.PStoVS(pkgScanners)
+			// Get packages from layer.
+			pkgs, err := n.Store.PackagesByLayer(gctx, layer.Hash, vscnrs)
+			if err != nil {
+				// On an early return gctx is canceled, and all in-flight
+				// Coalescers are canceled as well.
+				return Terminal, fmt.Errorf("failed to retrieve packages for %v: %w", layer.Hash, err)
+			}
+			la.Pkgs = append(la.Pkgs, pkgs...)
+			// Get repos that have been created via the package scanners.
+			pkgRepos, err := n.Store.RepositoriesByLayer(gctx, layer.Hash, vscnrs)
+			if err != nil {
+				return Terminal, fmt.Errorf("failed to retrieve repositories for %v: %w", layer.Hash, err)
+			}
+			la.Repos = append(la.Repos, pkgRepos...)
+
+			// Get distributions from layer.
+			vscnrs.DStoVS(distScanners) // Method allocates new "vscnr" underlying array, clearing old contents.
+			dists, err := n.Store.DistributionsByLayer(gctx, layer.Hash, vscnrs)
+			if err != nil {
+				return Terminal, fmt.Errorf("failed to retrieve distributions for %v: %w", layer.Hash, err)
+			}
+			la.Dist = append(la.Dist, dists...)
+			// Get repositories from layer.
+			vscnrs.RStoVS(repoScanners)
+			repos, err := n.Store.RepositoriesByLayer(gctx, layer.Hash, vscnrs)
+			if err != nil {
+				return Terminal, fmt.Errorf("failed to retrieve repositories for %v: %w", layer.Hash, err)
+			}
+			la.Repos = append(la.Repos, repos...)
+			// Get files from layer.
+			vscnrs.FStoVS(fileScanners)
+			files, err := n.Store.FilesByLayer(gctx, layer.Hash, vscnrs)
+			if err != nil {
+				return Terminal, fmt.Errorf("failed to retrieve files for %v: %w", layer.Hash, err)
+			}
+			la.Files = append(la.Files, files...)
+			// Pack artifacts array in layer order.
+			artifacts = append(artifacts, la)
+		}
+		coalescer, err := ecosystem.Coalescer(gctx)
+		if err != nil {
+			return Terminal, fmt.Errorf("failed to get coalescer from ecosystem: %v", err)
+		}
+		// Dispatch.
+		g.Go(func() error {
+			sr, err := coalescer.Coalesce(gctx, artifacts)
+			if err != nil {
+				return err
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			reports = append(reports, sr)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return Terminal, err
+	}
+	n.report = MergeSR(n.report, reports)
+	for _, r := range n.Resolvers {
+		n.report = r.Resolve(ctx, n.report, n.nodeLayers)
+	}
+	return IndexManifest, nil
 }
 
+// TODO: If controller.indexManifest would be generalized, we could save on this one
 func indexFS(ctx context.Context, n *NodescanController) (State, error) {
-	// FIXME: implement me
+	if n.report == nil {
+		return Terminal, fmt.Errorf("reached IndexManifest state with a nil report field. cannot continue")
+	}
+	err := n.Store.IndexManifest(ctx, n.report)
+	if err != nil {
+		return Terminal, fmt.Errorf("indexing manifest contents failed: %w", err)
+	}
 	return IndexFinished, nil
 }
 
 func indexFinishedFS(ctx context.Context, n *NodescanController) (State, error) {
-	// FIXME: implement me
+	n.report.Success = true
+	zlog.Info(ctx).Msg("finishing scan")
+
+	err := n.Store.SetIndexFinished(ctx, n.report, n.Vscnrs)
+	if err != nil {
+		return Terminal, fmt.Errorf("failed finish scan: %w", err)
+	}
+
+	zlog.Info(ctx).Msg("node successfully scanned")
 	return Terminal, nil
 }
