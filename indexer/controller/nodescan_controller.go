@@ -2,15 +2,17 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/quay/claircore"
 	"github.com/quay/claircore/indexer"
 	"github.com/quay/zlog"
 	"golang.org/x/sync/errgroup"
-	"strings"
-	"sync"
-	"time"
 )
 
 var (
@@ -62,19 +64,29 @@ func (s *NodescanController) Index(ctx context.Context, _ *claircore.Manifest) (
 	return nil, errors.New("not implemented for Nodescan Controller. Use IndexNode")
 }
 
+func getRandomSHA256() string {
+	data := make([]byte, 10)
+	rand.Read(data)
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
 // IndexNode kicks off an index of a node, given its filesystem
 // Initial state set in the constructor.
 func (s *NodescanController) IndexNode(ctx context.Context) (*claircore.IndexReport, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	h, err := claircore.ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Calc this hash on request, based on the FS
+	sha := getRandomSHA256()
+	ctx = context.WithValue(ctx, "manifest_id", sha)
+	h, err := claircore.ParseDigest(`sha256:` + sha) // FIXME: Calc this hash on request, based on the FS
 	if err != nil {
 		return nil, err
 	}
 	s.report.Hash = h
-	zlog.Info(ctx).Msg("Starting Node index")
-	defer zlog.Info(ctx).Msg("Node index done")
+	zlog.Info(ctx).Msgf("IndexNode report: %+v", s.report)
+	// TODO: Who fills the rest of the report?
+	zlog.Info(ctx).Msg("Starting NodescanController.IndexNode")
+	defer zlog.Info(ctx).Msg("NodescanController.IndexNode done")
 	s.Realizer = s.FetchArena.Realizer(ctx)
 	err = s.Realizer.Realize(ctx, s.nodeLayers) // FIXME: Do that differently
 	if err != nil {
@@ -114,6 +126,7 @@ func (s *NodescanController) runNodescan(ctx context.Context) (err error) {
 	var next State
 	var retry bool
 	var w time.Duration
+	zlog.Info(ctx).Msg("runNodescan starts")
 
 	// As long as there's not an error and the current state isn't Terminal, run
 	// the corresponding function.
@@ -217,25 +230,28 @@ var nsStateToStateFunc = map[State]nodescanStateFunc{
 func advanceToFetch(ctx context.Context, n *NodescanController) (State, error) {
 	// TODO: Check whether the node fs has changed, and persist the current checksum if so
 
-	d, _ := claircore.ParseDigest(`sha256:` + strings.Repeat(`a`, 64))
-	ok, err := n.Store.ManifestScanned(ctx, d, n.Vscnrs)
+	zlog.Info(ctx).Msg("advanceToFetch: start")
+	defer zlog.Info(ctx).Msg("advanceToFetch: done")
+	ok, err := n.Store.ManifestScanned(ctx, n.report.Hash, n.Vscnrs)
 	if err != nil {
+		zlog.Debug(ctx).Msg("advanceToFetch: error checking whether manifest was scanned")
 		return Terminal, err
 	}
 
 	if ok {
-		zlog.Debug(ctx).Msg("Manifest is known, should not scan again")
+		zlog.Info(ctx).Msg("advanceToFetch: Manifest is known, should not scan again")
 	}
 
 	if !ok {
 		// FIXME: Reintroduce scanner selection here like in the controller state func
-		zlog.Info(ctx).Msg("manifest to be scanned")
+		zlog.Info(ctx).Msg("advanceToFetch: manifest will be scanned")
 
 		m := claircore.Manifest{
-			Hash:   d,
-			Layers: nil,
+			Hash:   n.report.Hash,
+			Layers: n.nodeLayers,
 		}
 		err := n.Store.PersistManifest(ctx, m)
+		zlog.Info(ctx).Msgf("advanceToFetch: mainfest persitence error: %v", err)
 		if err != nil {
 			return Terminal, fmt.Errorf("failed to persist manifest: %w", err)
 		}
@@ -251,11 +267,7 @@ func prepareFS(_ context.Context, n *NodescanController) (State, error) {
 func scanFS(ctx context.Context, n *NodescanController) (State, error) {
 	zlog.Info(ctx).Msg("FS scan start")
 	defer zlog.Info(ctx).Msg("FS scan done")
-	h, err := claircore.ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Calc this hash on request, based on the FS
-	if err != nil {
-		return Terminal, err
-	}
-	err = n.LayerScanner.Scan(ctx, h, n.nodeLayers)
+	err := n.LayerScanner.Scan(ctx, n.report.Hash, n.nodeLayers)
 	if err != nil {
 		return Terminal, fmt.Errorf("failed to scan node filesystem: %w", err)
 		zlog.Debug(ctx).Msg("FS scan ok")

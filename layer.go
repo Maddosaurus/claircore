@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/quay/claircore/pkg/tarfs"
 )
@@ -77,12 +76,16 @@ type Layer struct {
 }
 
 // InitROFS initializes a layer based on a real folder
-func (l *Layer) InitROFS(_ context.Context, sys fs.FS) error {
+func (l *Layer) InitROFS(ctx context.Context, sys fs.FS) error {
 	if l.init {
 		return fmt.Errorf("claircore: Init called on already initialized Layer")
 	}
 	var err error
-	l.Hash, err = ParseDigest(`sha256:` + strings.Repeat(`a`, 64)) // FIXME: Add this as param?
+	sha, ok := ctx.Value("manifest_id").(string)
+	if !ok {
+		return errors.New("manifest_id is missing in the context")
+	}
+	l.Hash, err = ParseDigest(`sha256:` + sha) // FIXME: Add this as param?
 	if err != nil {
 		return err
 	}

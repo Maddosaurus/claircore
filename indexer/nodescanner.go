@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"fmt"
+
 	"github.com/quay/claircore"
 	"github.com/quay/zlog"
 )
