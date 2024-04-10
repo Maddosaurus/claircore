@@ -314,7 +314,9 @@ func (l *Libindex) IndexNode(ctx context.Context) (*claircore.IndexReport, error
 		return nil, err
 	}
 	zlog.Debug(ctx).Msg("locking OK")
-	return l.nodescanController.IndexNode(lc) // FIXME: Better init
+	// The controller must be created new for every call to ensure clean states every single time.
+	// Otherwise, the controller keeps fragments of the previous run, leading to crashes.
+	return controller.NewNodescanController(l.indexerOptions).IndexNode(lc)
 }
 
 // State returns an opaque identifier identifying how the struct is currently
