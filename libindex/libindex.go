@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/quay/claircore/rhel/rhcos"
 	"github.com/quay/zlog"
 	"golang.org/x/sync/errgroup"
 
@@ -201,6 +202,7 @@ func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client) (*Libindex
 			rhcc.NewEcosystem(ctx),
 			gobin.NewEcosystem(ctx),
 			ruby.NewEcosystem(ctx),
+			rhcos.NewEcosystem(ctx),
 		}
 	}
 	// Add whiteout objects

@@ -2,13 +2,16 @@ package rhcos
 
 import (
 	"context"
+
 	"github.com/quay/claircore/indexer"
+	"github.com/quay/claircore/rhel"
 	"github.com/quay/claircore/rpm"
 )
 
 // NewEcosystem returns a rhcos ecosystem.
 func NewEcosystem(_ context.Context) *indexer.Ecosystem {
 	return &indexer.Ecosystem{
+		Name: "rhcos",
 		PackageScanners: func(_ context.Context) ([]indexer.PackageScanner, error) {
 			return []indexer.PackageScanner{new(rpm.Scanner)}, nil
 		},
@@ -22,7 +25,7 @@ func NewEcosystem(_ context.Context) *indexer.Ecosystem {
 			return nil, nil
 		},
 		Coalescer: func(_ context.Context) (indexer.Coalescer, error) {
-			return nil, nil
+			return new(rhel.Coalescer), nil
 		},
 	}
 }

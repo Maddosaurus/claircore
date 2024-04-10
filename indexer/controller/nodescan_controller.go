@@ -83,10 +83,6 @@ func (s *NodescanController) IndexNode(ctx context.Context) (*claircore.IndexRep
 		return nil, err
 	}
 	s.report.Hash = h
-	zlog.Info(ctx).Msgf("IndexNode report: %+v", s.report)
-	// TODO: Who fills the rest of the report?
-	zlog.Info(ctx).Msg("Starting NodescanController.IndexNode")
-	defer zlog.Info(ctx).Msg("NodescanController.IndexNode done")
 	s.Realizer = s.FetchArena.Realizer(ctx)
 	err = s.Realizer.Realize(ctx, s.nodeLayers) // FIXME: Do that differently
 	if err != nil {
@@ -132,7 +128,7 @@ func (s *NodescanController) runNodescan(ctx context.Context) (err error) {
 	// the corresponding function.
 	for err == nil && s.currentState != Terminal {
 		ctx := zlog.ContextWithValues(ctx, "state", s.currentState.String())
-		zlog.Info(ctx).Msgf("Current report: %+v", s.report)
+		zlog.Info(ctx).Msgf("Currently report has %d packages", len(s.report.Packages))
 		next, err = nsStateToStateFunc[s.currentState](ctx, s)
 		switch {
 		case errors.Is(err, nil) && !errors.Is(ctx.Err(), nil):
@@ -223,6 +219,9 @@ var nsStateToStateFunc = map[State]nodescanStateFunc{
 	Coalesce:      coalesceFS,
 	IndexManifest: indexFS,
 	IndexFinished: indexFinishedFS,
+	IndexError: func(ctx context.Context, controller *NodescanController) (State, error) {
+		return Terminal, errors.New("Index Error state reached")
+	},
 	// FIXME: Add the remaining states, as the state machine needs them
 }
 
@@ -251,7 +250,6 @@ func advanceToFetch(ctx context.Context, n *NodescanController) (State, error) {
 			Layers: n.nodeLayers,
 		}
 		err := n.Store.PersistManifest(ctx, m)
-		zlog.Info(ctx).Msgf("advanceToFetch: mainfest persitence error: %v", err)
 		if err != nil {
 			return Terminal, fmt.Errorf("failed to persist manifest: %w", err)
 		}

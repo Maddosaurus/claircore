@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/quay/zlog"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -61,7 +60,6 @@ DO
 
 	start := time.Now()
 	_, err := s.pool.Exec(ctx, query, ir.Hash, jsonbIndexReport(*ir))
-	zlog.Info(ctx).Msgf("report", jsonbIndexReport(*ir))
 	if err != nil {
 		return fmt.Errorf("failed to upsert index report: %w", err)
 	}
