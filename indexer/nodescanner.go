@@ -50,7 +50,8 @@ func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, layers []*c
 			zlog.Info(ctx).Msg("Scanning with ps scanner")
 			err := ns.scanLayer(ctx, l, s)
 			if err != nil {
-				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+				zlog.Error(ctx).Err(err).Msg("error scanning ps layer")
+				return err
 			}
 		}
 		for _, s := range ns.ds {
@@ -58,24 +59,26 @@ func (ns *NodeScanner) Scan(ctx context.Context, _ claircore.Digest, layers []*c
 			err := ns.scanLayer(ctx, l, s)
 			if err != nil {
 				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+				return err
 			}
 		}
 		for _, s := range ns.rs {
 			zlog.Info(ctx).Msg("Scanning with rs scanner")
 			err := ns.scanLayer(ctx, l, s)
 			if err != nil {
-				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+				zlog.Error(ctx).Err(err).Msg("error scanning rs layer")
+				return err
 			}
 		}
 		for _, s := range ns.fis {
 			zlog.Info(ctx).Msg("Scanning with fis scanner")
 			err := ns.scanLayer(ctx, l, s)
 			if err != nil {
-				zlog.Error(ctx).Err(err).Msg("error scanning fs layer")
+				zlog.Error(ctx).Err(err).Msg("error scanning fis layer")
+				return err
 			}
 		}
 	}
-	// FIXME: Error handling for called scanners
 	return nil
 }
 
