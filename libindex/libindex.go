@@ -168,7 +168,7 @@ func New(ctx context.Context, opts *Options, cl *http.Client) (*Libindex, error)
 
 // NewNodeScan .
 // FIXME: Expose indexer options without duplication
-func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client) (*Libindex, error) {
+func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client, hostFSPath string) (*Libindex, error) {
 	ctx = zlog.ContextWithValues(ctx, "component", "libindex/New")
 	// required
 	if opts.Locker == nil {
@@ -248,7 +248,7 @@ func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client) (*Libindex
 	// create indexer.Options
 	l.indexerOptions = &indexer.Options{
 		Store:         l.store,
-		FetchArena:    indexer.NewNodeArena(cl, "/tmp/rhcos"),
+		FetchArena:    indexer.NewNodeArena(cl, hostFSPath),
 		Ecosystems:    opts.Ecosystems,
 		Vscnrs:        l.vscnrs,
 		Client:        l.client,

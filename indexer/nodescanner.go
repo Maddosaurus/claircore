@@ -8,10 +8,6 @@ import (
 	"github.com/quay/zlog"
 )
 
-var (
-	mountLocation = "/tmp/rhcos"
-)
-
 // TODO: This has no concurrency currently. Also, eval whether we can get the layerScanner to work with a single layer
 type NodeScanner struct {
 	store Store

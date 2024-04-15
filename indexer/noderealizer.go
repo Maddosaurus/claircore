@@ -57,7 +57,7 @@ func (m *MountedFS) RealizeDescriptions(ctx context.Context, _ []claircore.Layer
 // FIXME: dedup
 func (m *MountedFS) Realize(ctx context.Context, ls []*claircore.Layer) error {
 	// TODO: Ensure mounting works
-	zlog.Info(ctx).Msg("Realizing mount path")
+	zlog.Info(ctx).Msgf("Realizing mount path: %s", m.n.mountPath)
 	nodeFS := os.DirFS(m.n.mountPath)
 	l := claircore.Layer{}
 	err := l.InitROFS(ctx, nodeFS)
