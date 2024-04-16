@@ -197,6 +197,7 @@ func (r *RepositoryScanner) Scan(ctx context.Context, l *claircore.Layer) (repos
 	tctx, done := context.WithTimeout(ctx, r.cfg.Timeout)
 	defer done()
 	cmi, err := r.upd.Get(tctx, r.client)
+	zlog.Info(ctx).Msgf("is cmi != nil: %v", cmi != nil)
 	if err != nil && cmi == nil {
 		return []*claircore.Repository{}, err
 	}
@@ -205,6 +206,7 @@ func (r *RepositoryScanner) Scan(ctx context.Context, l *claircore.Layer) (repos
 		return []*claircore.Repository{}, fmt.Errorf("rhel: unable to create a mappingFile object")
 	}
 	CPEs, err := mapContentSets(ctx, sys, cm)
+	zlog.Info(ctx).Msgf("mapped CPEs: %v", CPEs)
 	if err != nil {
 		return []*claircore.Repository{}, err
 	}
@@ -237,6 +239,7 @@ func (r *RepositoryScanner) Scan(ctx context.Context, l *claircore.Layer) (repos
 		repositories = append(repositories, r)
 	}
 
+	zlog.Info(ctx).Msgf("Discovered Repositories: %v", repositories)
 	return repositories, nil
 }
 
@@ -254,7 +257,7 @@ func mapContentSets(ctx context.Context, sys fs.FS, cm *mappingFile) ([]string, 
 		return nil, nil
 	}
 	p := ms[0]
-	zlog.Debug(ctx).
+	zlog.Info(ctx).
 		Str("manifest-path", p).
 		Msg("found content manifest file")
 	b, err := fs.ReadFile(sys, p)
