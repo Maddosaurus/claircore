@@ -250,6 +250,11 @@ func mapContentSets(ctx context.Context, sys fs.FS, cm *mappingFile) ([]string, 
 	if err != nil {
 		panic("programmer error: " + err.Error())
 	}
+	ms2, err := fs.Glob(sys, `usr/share/buildinfo/*.json`) // FIXME: Check with ClairCore team about this
+	if err != nil {
+		panic("programmer error: " + err.Error())
+	}
+	ms = append(ms, ms2...)
 	if ms == nil {
 		return nil, nil
 	}

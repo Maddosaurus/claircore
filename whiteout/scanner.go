@@ -45,7 +45,7 @@ func (s *Scanner) Scan(ctx context.Context, l *claircore.Layer) ([]claircore.Fil
 	wofs := []claircore.File{}
 	err = fs.WalkDir(sys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			zlog.Warn(ctx).Msgf("err: %v", err)
 		}
 		if strings.HasPrefix(d.Name(), ".wh.") {
 			cf := claircore.File{
