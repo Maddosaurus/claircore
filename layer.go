@@ -112,6 +112,9 @@ func (l *Layer) Init(ctx context.Context, desc *LayerDescription, r io.ReaderAt)
 			return fmt.Errorf("claircore: layer %v: unable to create fs.FS: %w", desc.Digest, err)
 		}
 		l.sys = sys
+	case `filesystem/path`:
+		sys := os.DirFS(desc.URI)
+		l.sys = sys
 	default:
 		return fmt.Errorf("claircore: layer %v: unknown MediaType %q", desc.Digest, desc.MediaType)
 	}
