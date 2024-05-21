@@ -35,7 +35,7 @@ func (mc *Controller) Match(ctx context.Context, records []*claircore.IndexRecor
 		"matcher", mc.m.Name())
 	// find the packages the matcher is interested in.
 	interested := mc.findInterested(records)
-	zlog.Debug(ctx).
+	zlog.Info(ctx).
 		Int("interested", len(interested)).
 		Int("records", len(records)).
 		Msg("interest")

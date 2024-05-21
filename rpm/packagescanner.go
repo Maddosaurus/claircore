@@ -71,7 +71,8 @@ func (ps *Scanner) Scan(ctx context.Context, layer *claircore.Layer) ([]*clairco
 
 	found := make([]foundDB, 0)
 	if err := fs.WalkDir(sys, ".", findDBs(ctx, &found, sys)); err != nil {
-		return nil, fmt.Errorf("rpm: error walking fs: %w", err)
+		// return nil, fmt.Errorf("rpm: error walking fs: %w", err)
+		zlog.Warn(ctx).Msgf("failed walking fs: %v", err)
 	}
 	if len(found) == 0 {
 		return nil, nil
@@ -180,10 +181,15 @@ func (ps *Scanner) Scan(ctx context.Context, layer *claircore.Layer) ([]*clairco
 
 func findDBs(ctx context.Context, out *[]foundDB, sys fs.FS) fs.WalkDirFunc {
 	return func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+
+		if err != nil && d.IsDir() {
+			return fs.SkipDir
 		}
 		if d.IsDir() {
+			return nil
+		}
+		if err != nil {
+			//return err
 			return nil
 		}
 

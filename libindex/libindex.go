@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/quay/claircore/rhel/rhcos"
 	"github.com/quay/zlog"
 	"golang.org/x/sync/errgroup"
 
@@ -63,6 +64,8 @@ type Libindex struct {
 	// indexerOptions hold construction context for the layerScanner and the
 	// controller factory.
 	indexerOptions *indexer.Options
+	// FIXME: Integrate into options
+	nodescanController *controller.NodescanController
 }
 
 // New creates a new instance of libindex.
@@ -163,6 +166,105 @@ func New(ctx context.Context, opts *Options, cl *http.Client) (*Libindex, error)
 	return l, nil
 }
 
+// NewNodeScan .
+// FIXME: Expose indexer options without duplication
+func NewNodeScan(ctx context.Context, opts *Options, cl *http.Client, hostFSPath string) (*Libindex, error) {
+	ctx = zlog.ContextWithValues(ctx, "component", "libindex/New")
+	// required
+	if opts.Locker == nil {
+		return nil, fmt.Errorf("field Locker cannot be nil")
+	}
+	if opts.Store == nil {
+		return nil, fmt.Errorf("field Store cannot be nil")
+	}
+	if opts.FetchArena == nil {
+		return nil, fmt.Errorf("field FetchArena cannot be nil")
+	}
+
+	// optional
+	if (opts.ScanLockRetry == 0) || (opts.ScanLockRetry < time.Second) {
+		opts.ScanLockRetry = DefaultScanLockRetry
+	}
+	if opts.LayerScanConcurrency == 0 {
+		opts.LayerScanConcurrency = DefaultLayerScanConcurrency
+	}
+	if opts.ControllerFactory == nil {
+		opts.ControllerFactory = controller.New
+	}
+	if opts.Ecosystems == nil {
+		opts.Ecosystems = []*indexer.Ecosystem{
+			dpkg.NewEcosystem(ctx),
+			alpine.NewEcosystem(ctx),
+			rhel.NewEcosystem(ctx),
+			rpm.NewEcosystem(ctx),
+			python.NewEcosystem(ctx),
+			java.NewEcosystem(ctx),
+			rhcc.NewEcosystem(ctx),
+			gobin.NewEcosystem(ctx),
+			ruby.NewEcosystem(ctx),
+			rhcos.NewEcosystem(ctx),
+		}
+	}
+	// Add whiteout objects
+	// Always add the whiteout ecosystem
+	opts.Ecosystems = append(opts.Ecosystems, whiteout.NewEcosystem(ctx))
+	opts.Resolvers = []indexer.Resolver{
+		&whiteout.Resolver{},
+	}
+
+	if cl == nil {
+		return nil, errors.New("invalid *http.Client")
+	}
+
+	l := &Libindex{
+		Options: opts,
+		client:  cl,
+		store:   opts.Store,
+		locker:  opts.Locker,
+		fa:      opts.FetchArena,
+	}
+
+	// register any new scanners.
+	pscnrs, dscnrs, rscnrs, fscnrs, err := indexer.EcosystemsToScanners(ctx, opts.Ecosystems)
+	if err != nil {
+		return nil, err
+	}
+	vscnrs := indexer.MergeVS(pscnrs, dscnrs, rscnrs, fscnrs)
+
+	err = l.store.RegisterScanners(ctx, vscnrs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register configured scanners: %v", err)
+	}
+
+	// set the indexer's state
+	err = l.setState(ctx, vscnrs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set the indexer state: %v", err)
+	}
+
+	zlog.Info(ctx).Msg("registered configured scanners")
+	l.vscnrs = vscnrs
+
+	// create indexer.Options
+	l.indexerOptions = &indexer.Options{
+		Store:         l.store,
+		FetchArena:    indexer.NewNodeArena(cl, hostFSPath),
+		Ecosystems:    opts.Ecosystems,
+		Vscnrs:        l.vscnrs,
+		Client:        l.client,
+		ScannerConfig: opts.ScannerConfig,
+		Resolvers:     opts.Resolvers,
+	}
+
+	l.indexerOptions.LayerScanner, err = indexer.NewNodeScanner(ctx, opts.LayerScanConcurrency, l.indexerOptions)
+	l.nodescanController = controller.NewNodescanController(l.indexerOptions) // FIXME: Move somewhere sensible
+	if err != nil {
+		return nil, err
+	}
+
+	return l, nil
+}
+
 // Close releases held resources.
 func (l *Libindex) Close(ctx context.Context) error {
 	l.locker.Close(ctx)
@@ -193,6 +295,28 @@ func (l *Libindex) Index(ctx context.Context, manifest *claircore.Manifest) (*cl
 	zlog.Debug(ctx).Msg("locking OK")
 	c := l.ControllerFactory(l.indexerOptions)
 	return c.Index(lc, manifest)
+}
+
+// IndexNode .
+// FIXME: Dedup
+func (l *Libindex) IndexNode(ctx context.Context) (*claircore.IndexReport, error) {
+	ctx = zlog.ContextWithValues(ctx,
+		"component", "libindex/Libindex.Index")
+	zlog.Info(ctx).Msg("index request start")
+	defer zlog.Info(ctx).Msg("index request done")
+
+	zlog.Debug(ctx).Msg("locking attempt")
+	lc, done := l.locker.Lock(ctx, "nodescan")
+	defer done()
+	// The process may have waited on the lock, so check that the context is
+	// still active.
+	if err := lc.Err(); !errors.Is(err, nil) {
+		return nil, err
+	}
+	zlog.Debug(ctx).Msg("locking OK")
+	// The controller must be created new for every call to ensure clean states every single time.
+	// Otherwise, the controller keeps fragments of the previous run, leading to crashes.
+	return controller.NewNodescanController(l.indexerOptions).IndexNode(lc)
 }
 
 // State returns an opaque identifier identifying how the struct is currently

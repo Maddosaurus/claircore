@@ -13,6 +13,14 @@ import (
 	"github.com/quay/claircore/indexer"
 )
 
+var (
+	_ IndexController = (*Controller)(nil)
+)
+
+type IndexController interface {
+	Index(ctx context.Context, manifest *claircore.Manifest) (*claircore.IndexReport, error)
+}
+
 // Controller is a control structure for scanning a manifest.
 //
 // Controller is implemented as an FSM.
