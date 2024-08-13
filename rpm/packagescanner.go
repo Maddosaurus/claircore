@@ -180,11 +180,11 @@ func (ps *Scanner) Scan(ctx context.Context, layer *claircore.Layer) ([]*clairco
 
 func findDBs(ctx context.Context, out *[]foundDB, sys fs.FS) fs.WalkDirFunc {
 	return func(p string, d fs.DirEntry, err error) error {
+		if d != nil && d.IsDir() {
+			return nil
+		}
 		if err != nil {
 			return err
-		}
-		if d.IsDir() {
-			return nil
 		}
 
 		dir, n := path.Split(p)
